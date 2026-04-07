@@ -4,15 +4,15 @@ import PyPDF2
 import google.generativeai as genai
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="ATS Expert Pro", layout="centered")
+st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="🛡️")
 
 # --- CONFIGURACIÓN DE IA ---
-# Recuerda tener tu archivo .streamlit/secrets.toml con:
-# GEMINI_API_KEY = "AIzaSyDfPDiD7M1rY1tK7p25m488R7doOoHm95s"
+# Para que esto funcione en la nube, recuerda configurar GEMINI_API_KEY en:
+# Manage App -> Settings -> Secrets
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    # Cambia 'gemini-1.5-flash' por 'gemini-pro'
-    model = genai.GenerativeModel('gemini-pro')
+    # Usamos el nombre técnico completo para evitar errores de versión
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
 else:
     st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
 
@@ -24,24 +24,27 @@ st.markdown("---")
 st.subheader("Paso 1: Validación de Formato")
 uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"])
 
-texto_extraido = "" # Inicializamos la variable
+texto_extraido = "" # Variable para almacenar el contenido del CV
 
 if uploaded_file:
     st.info("Analizando estructura...")
     
     try:
-        # Lógica para leer PDF
+        # Lógica para leer archivos PDF
         if uploaded_file.type == "application/pdf":
             reader = PyPDF2.PdfReader(uploaded_file)
             for page in reader.pages:
-                texto_extraido += page.extract_text()
+                text = page.extract_text()
+                if text:
+                    texto_extraido += text
         
-        # Lógica para leer DOCX (Word)
+        # Lógica para leer archivos DOCX (Word)
         else:
             doc = Document(uploaded_file)
             for para in doc.paragraphs:
                 texto_extraido += para.text + "\n"
 
+        # Verificar si logramos extraer texto real
         if texto_extraido.strip():
             st.success("✅ ¡Éxito! El ATS pudo leer el texto de tu archivo.")
             with st.expander("Haz clic aquí para ver el texto detectado"):
@@ -63,10 +66,10 @@ if uploaded_file:
                 else:
                     with st.spinner("La IA está evaluando tu perfil contra la vacante..."):
                         try:
-                            # El Prompt Maestro para el ATS
+                            # Prompt optimizado para un análisis profesional
                             prompt = f"""
                             Actúa como un experto en Reclutamiento Técnico y Sistemas ATS.
-                            Analiza el siguiente CV basándote en la descripción de la vacante.
+                            Analiza el siguiente CV basándote en la descripción de la vacante proporcionada.
                             
                             DOCUMENTO CV:
                             {texto_extraido}
@@ -74,26 +77,32 @@ if uploaded_file:
                             DESCRIPCIÓN DE LA VACANTE:
                             {vacante}
                             
-                            Proporciona un informe estructurado con:
-                            1. Porcentaje de compatibilidad (0-100%).
-                            2. Análisis de Keywords (¿Cuáles faltan?).
-                            3. Fortalezas detectadas.
-                            4. Recomendaciones críticas para mejorar el CV para esta posición.
+                            Proporciona un informe estructurado y profesional usando Markdown:
+                            1. **Porcentaje de compatibilidad** (0-100%).
+                            2. **Análisis de Keywords** (Menciona cuáles faltan en el CV).
+                            3. **Fortalezas detectadas**.
+                            4. **Recomendaciones críticas** para optimizar el CV específicamente para esta vacante.
                             """
                             
                             response = model.generate_content(prompt)
                             
+                            st.markdown("---")
                             st.markdown("### 📊 Resultado del Análisis")
                             st.markdown(response.text)
                             
                         except Exception as e:
                             st.error(f"Error al conectar con la IA: {e}")
+                            st.info("Tip: Revisa que tu API Key sea válida y que no hayas excedido el límite de cuota gratuita.")
                             
         else:
-            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen escaneada.")
+            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen escaneada (OCR no soportado aún).")
             
     except Exception as e:
         st.error(f"Hubo un error al procesar el archivo: {e}")
 
 else:
     st.write("Por favor, sube un archivo para comenzar.")
+
+# --- PIE DE PÁGINA ---
+st.markdown("---")
+st.caption("ATS Expert Pro - Desarrollado con Streamlit y Google Gemini AI")
