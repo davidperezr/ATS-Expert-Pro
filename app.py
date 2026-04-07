@@ -22,7 +22,7 @@ if uploaded_file:
             for page in reader.pages:
                 texto_extraido += page.extract_text()
         
-        # Lógica para leer DOCX
+        # Lógica para leer DOCX (Word)
         else:
             doc = Document(uploaded_file)
             for para in doc.paragraphs:
@@ -33,7 +33,7 @@ if uploaded_file:
             with st.expander("Haz clic aquí para ver el texto detectado"):
                 st.text(texto_extraido)
         else:
-            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen (scaneado).")
+            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen scaneada.")
             
     except Exception as e:
         st.error(f"Hubo un error al procesar el archivo: {e}")
