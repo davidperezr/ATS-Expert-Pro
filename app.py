@@ -4,17 +4,13 @@ import PyPDF2
 import re
 import pandas as pd
 from collections import Counter
-import language_tool_python
-
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
 # --- CONFIG ---
-st.set_page_config(page_title="ATS Expert Ultimate PRO", layout="centered")
-st.title("🧠 ATS Expert Ultimate PRO (Nivel Consultora)")
+st.set_page_config(page_title="ATS Expert PRO (Cloud)", layout="centered")
+st.title("🧠 ATS Expert PRO (Versión Estable sin IA)")
 st.markdown("---")
-
-tool = language_tool_python.LanguageTool('es')
 
 uploaded_files = st.file_uploader(
     "Sube múltiples CVs",
@@ -50,12 +46,19 @@ def limpiar_texto(texto):
     texto = re.sub(r'[^a-zA-Z0-9\s]', ' ', texto.lower())
     return re.sub(r'\s+', ' ', texto)
 
-# --- ORTOGRAFIA ---
+# --- ORTOGRAFIA BASICA (SIN IA NI JAVA) ---
 def analizar_ortografia(texto):
-    matches = tool.check(texto)
     errores = []
-    for m in matches[:15]:
-        errores.append(f"❌ {m.message}")
+
+    if "  " in texto:
+        errores.append("✍️ Doble espacio detectado")
+
+    if re.search(r'\b(q|xk|pq)\b', texto):
+        errores.append("⚠️ Uso de lenguaje informal")
+
+    if re.search(r'\bteh\b', texto):
+        errores.append("❌ Error ortográfico común detectado")
+
     return errores
 
 # --- LOGROS VS RESPONSABILIDADES ---
@@ -76,7 +79,7 @@ def analizar_logros(texto):
 def detectar_bullets(texto):
     return len(re.findall(r'[-•●]', texto))
 
-# --- ANALISIS BASE ATS ---
+# --- ANALISIS ATS BASE ---
 def analizar(texto, vacante):
     cv_clean = limpiar_texto(texto)
     vac_clean = limpiar_texto(vacante)
@@ -89,7 +92,6 @@ def analizar(texto, vacante):
 # --- SCORE AVANZADO ---
 def score_avanzado(texto, vacante):
     score_kw = analizar(texto, vacante)
-
     errores = len(analizar_ortografia(texto))
     logros, resp = analizar_logros(texto)
 
@@ -142,16 +144,24 @@ def auditoria_cv(texto, vacante):
 
     return observaciones
 
-# --- REESCRITURA ---
+# --- REESCRITURA AUTOMATICA ---
 def reescribir_cv(texto):
     mejoras = []
+
     for linea in texto.split("\n"):
-        if any(p in linea for p in PALABRAS_DEBILES):
-            nueva = re.sub(r"responsable de", "Lideré", linea)
-            nueva = re.sub(r"apoyo en", "Contribuí a", nueva)
-            mejoras.append("💡 " + nueva)
-        else:
-            mejoras.append(linea)
+        nueva = linea
+
+        if "responsable de" in linea:
+            nueva = linea.replace("responsable de", "Lideré")
+
+        if "apoyo en" in linea:
+            nueva = nueva.replace("apoyo en", "Contribuí a")
+
+        if "encargado de" in linea:
+            nueva = nueva.replace("encargado de", "Gestioné")
+
+        mejoras.append(nueva)
+
     return "\n".join(mejoras)
 
 # --- PDF ---
@@ -229,4 +239,4 @@ else:
     st.info("Sube CVs para comenzar")
 
 st.markdown("---")
-st.caption("ATS Expert Ultimate PRO - Sistema Inteligente de Optimización de CV")
+st.caption("ATS Expert PRO - Versión Cloud Estable (Sin IA)")
