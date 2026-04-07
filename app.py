@@ -12,8 +12,8 @@ st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="�
 if "GEMINI_API_KEY" in st.secrets:
     # transport='rest' evita el error 404 v1beta en servidores como Streamlit Cloud
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='rest')
-    # Usamos el nombre del modelo estándar
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Forzamos el uso de la v1 en lugar de v1beta para evitar el error 404
+    model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
 else:
     st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
 
