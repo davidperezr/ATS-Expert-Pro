@@ -7,13 +7,10 @@ import google.generativeai as genai
 st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="🛡️")
 
 # --- CONFIGURACIÓN DE IA ---
-# Para que esto funcione en la nube, configura GEMINI_API_KEY en:
-# Manage App -> Settings -> Secrets
 if "GEMINI_API_KEY" in st.secrets:
-    # transport='rest' evita el error 404 v1beta en servidores como Streamlit Cloud
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='rest')
-    # Forzamos el uso de la v1 en lugar de v1beta para evitar el error 404
-    model = genai.GenerativeModel(model_name="models/gemini-1.5-flash")
+    # Configuración estándar para evitar conflictos de rutas API (Error 404)
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
 
@@ -93,7 +90,7 @@ if uploaded_file:
                             
                         except Exception as e:
                             st.error(f"Error al conectar con la IA: {e}")
-                            st.info("Tip: Asegúrate de que tu requirements.txt tenga 'google-generativeai==0.7.2'")
+                            st.info("Tip: Asegúrate de que tu API Key sea correcta en los Secretos de Streamlit.")
                             
         else:
             st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen escaneada.")
