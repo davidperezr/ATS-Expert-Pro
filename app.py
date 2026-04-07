@@ -1,142 +1,99 @@
 import streamlit as st
 from docx import Document
 import PyPDF2
-import requests
+import re
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="🛡️")
+# --- CONFIG ---
+st.set_page_config(page_title="ATS Expert Pro", layout="centered")
 
-# --- VALIDAR API KEY ---
-if "OPENROUTER_API_KEY" not in st.secrets:
-    st.error("⚠️ No se encontró la API Key de OpenRouter en secrets.toml")
-    st.stop()
-
-# --- FUNCIÓN IA (con fallback de modelos) ---
-def analizar_con_ia(prompt):
-    url = "https://openrouter.ai/api/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
-        "Content-Type": "application/json"
-    }
-
-    modelos = [
-        "meta-llama/llama-3-8b-instruct",
-        "mistralai/mistral-7b-instruct"
-    ]
-
-    for modelo in modelos:
-        try:
-            data = {
-                "model": modelo,
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
-
-            response = requests.post(url, headers=headers, json=data)
-
-            if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
-        except:
-            continue
-
-    raise Exception("No hay modelos disponibles en este momento")
-
-
-# --- INTERFAZ ---
-st.title("🛡️ ATS Expert Pro")
+# --- UI ---
+st.title("🛡️ ATS Expert Pro (Modo Gratis)")
 st.markdown("---")
 
-# --- SUBIDA DE ARCHIVO ---
-st.subheader("Paso 1: Validación de Formato")
 uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"])
 
 texto_extraido = ""
 
-# --- FUNCIÓN PARA REDUCIR TEXTO ---
-def recortar_texto(texto, max_chars=6000):
-    return texto[:max_chars]
+# --- EXTRAER TEXTO ---
+def extraer_texto(file):
+    texto = ""
 
+    if file.type == "application/pdf":
+        reader = PyPDF2.PdfReader(file)
+        for page in reader.pages:
+            texto += page.extract_text() or ""
+    else:
+        doc = Document(file)
+        for p in doc.paragraphs:
+            texto += p.text + "\n"
+
+    return texto.lower()
+
+# --- LIMPIAR TEXTO ---
+def limpiar_texto(texto):
+    return re.sub(r'[^a-zA-Z0-9\s]', '', texto)
+
+# --- EXTRAER KEYWORDS ---
+def obtener_keywords(texto):
+    palabras = texto.split()
+    palabras_unicas = list(set(palabras))
+    return palabras_unicas
+
+# --- ANALISIS ATS ---
+def analizar(cv, vacante):
+    cv = limpiar_texto(cv)
+    vacante = limpiar_texto(vacante)
+
+    kw_cv = set(obtener_keywords(cv))
+    kw_vac = set(obtener_keywords(vacante))
+
+    coincidencias = kw_cv.intersection(kw_vac)
+    faltantes = kw_vac - kw_cv
+
+    if len(kw_vac) == 0:
+        score = 0
+    else:
+        score = int((len(coincidencias) / len(kw_vac)) * 100)
+
+    return score, coincidencias, faltantes
+
+# --- MAIN ---
 if uploaded_file:
-    st.info("Analizando estructura...")
+    texto_extraido = extraer_texto(uploaded_file)
 
-    try:
-        # PDF
-        if uploaded_file.type == "application/pdf":
-            reader = PyPDF2.PdfReader(uploaded_file)
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    texto_extraido += text
+    if texto_extraido.strip():
+        st.success("✅ Texto extraído correctamente")
 
-        # DOCX
-        else:
-            doc = Document(uploaded_file)
-            for para in doc.paragraphs:
-                texto_extraido += para.text + "\n"
+        with st.expander("Ver CV detectado"):
+            st.text(texto_extraido[:2000])
 
-        if texto_extraido.strip():
-            st.success("✅ ¡Éxito! El ATS pudo leer el texto de tu archivo.")
+        vacante = st.text_area("Pega la descripción del puesto")
 
-            with st.expander("Ver texto detectado"):
-                st.text(texto_extraido)
+        if st.button("🚀 Analizar CV"):
+            if not vacante.strip():
+                st.warning("Agrega la vacante")
+            else:
+                score, ok, faltantes = analizar(texto_extraido, vacante)
 
-            # --- IA ---
-            st.markdown("---")
-            st.subheader("Paso 2: Análisis con IA")
+                st.markdown("---")
+                st.subheader("📊 Resultado ATS")
 
-            vacante = st.text_area(
-                "Pega la descripción del puesto:",
-                height=200
-            )
+                st.metric("Compatibilidad", f"{score}%")
 
-            if st.button("🚀 Analizar CV"):
-                if not vacante.strip():
-                    st.warning("Agrega la descripción de la vacante.")
-                else:
-                    with st.spinner("Analizando con IA..."):
-                        try:
-                            cv_corto = recortar_texto(texto_extraido)
-                            vacante_corta = recortar_texto(vacante)
+                st.markdown("### ✅ Coincidencias")
+                st.write(list(ok)[:20])
 
-                            prompt = f"""
-Actúa como experto en reclutamiento ATS.
+                st.markdown("### ❌ Keywords faltantes")
+                st.write(list(faltantes)[:20])
 
-Analiza este CV contra la vacante.
+                st.markdown("### 💡 Recomendaciones")
+                st.write("Incluye más palabras clave relevantes de la vacante en tu CV.")
 
-CV:
-{cv_corto}
-
-VACANTE:
-{vacante_corta}
-
-Entrega:
-
-1. Porcentaje de compatibilidad (0-100%)
-2. Keywords faltantes
-3. Fortalezas
-4. Recomendaciones específicas
-"""
-
-                            resultado = analizar_con_ia(prompt)
-
-                            st.markdown("---")
-                            st.markdown("### 📊 Resultado del Análisis")
-                            st.markdown(resultado)
-
-                        except Exception as e:
-                            st.error(f"Error con IA: {e}")
-
-        else:
-            st.warning("⚠️ El archivo parece vacío o escaneado.")
-
-    except Exception as e:
-        st.error(f"Error procesando archivo: {e}")
+    else:
+        st.warning("No se pudo leer el archivo")
 
 else:
-    st.write("Sube un CV para comenzar.")
+    st.info("Sube tu CV para comenzar")
 
-# --- FOOTER ---
 st.markdown("---")
-st.caption("ATS Expert Pro - David Pérez Reyes")
+st.caption("Versión gratuita sin IA - ATS Expert Pro")
