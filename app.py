@@ -2,16 +2,20 @@ import streamlit as st
 from docx import Document
 import PyPDF2
 import re
+import pandas as pd
 
 # --- CONFIG ---
-st.set_page_config(page_title="ATS Expert Pro", layout="centered")
-
-st.title("🛡️ ATS Expert Pro (Nivel Profesional - Sin IA)")
+st.set_page_config(page_title="ATS Expert Ultimate", layout="centered")
+st.title("🧠 ATS Expert Ultimate (Nivel Reclutador Senior)")
 st.markdown("---")
 
-uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"])
+uploaded_files = st.file_uploader(
+    "Sube múltiples CVs",
+    type=["pdf", "docx"],
+    accept_multiple_files=True
+)
 
-# --- SKILLS AVANZADAS ---
+# --- DATA BASE ---
 SKILLS_CLAVE = [
     "python","sql","java","c++","javascript","typescript",
     "excel","power bi","tableau",
@@ -20,12 +24,16 @@ SKILLS_CLAVE = [
     "machine learning","data analysis","etl","spark"
 ]
 
+IDIOMAS = ["english","spanish","french","german"]
+
+EDUCACION = ["licenciatura","ingenieria","maestria","doctorado","bachelor","master"]
+
 STOPWORDS = {
     "el","la","de","y","en","a","los","del","se","las","por","un","para","con",
     "una","su","al","lo","como","más","pero","sus","le","ya","o","este","sí"
 }
 
-# --- FUNCIONES BASE ---
+# --- FUNCIONES ---
 def extraer_texto(file):
     texto = ""
     if file.type == "application/pdf":
@@ -49,125 +57,115 @@ def obtener_keywords(texto):
 def detectar_skills(texto):
     return set([s for s in SKILLS_CLAVE if s in texto])
 
-# --- ANALISIS AVANZADO ---
-def analizar_avanzado(cv, vacante):
-    cv = limpiar_texto(cv)
-    vacante = limpiar_texto(vacante)
+def detectar_idiomas(texto):
+    return [i for i in IDIOMAS if i in texto]
 
-    kw_cv = obtener_keywords(cv)
-    kw_vac = obtener_keywords(vacante)
+def detectar_educacion(texto):
+    return [e for e in EDUCACION if e in texto]
 
-    skills_cv = detectar_skills(cv)
-    skills_vac = detectar_skills(vacante)
+def extraer_nombre(texto):
+    lineas = texto.split("\n")
+    if lineas:
+        return lineas[0][:40]
+    return "No detectado"
 
-    # --- METRICAS ---
-    kw_match = len(kw_cv & kw_vac)
-    kw_total = len(kw_vac)
+def estimar_experiencia(texto):
+    matches = re.findall(r'(\d+)\s*(años|years)', texto)
+    if matches:
+        return max([int(m[0]) for m in matches])
+    return 0
 
-    skills_match = len(skills_cv & skills_vac)
-    skills_total = len(skills_vac)
+# --- ANALISIS ---
+def analizar(cv, vacante):
+    cv_clean = limpiar_texto(cv)
+    vac_clean = limpiar_texto(vacante)
 
-    densidad = kw_match / max(len(kw_cv), 1)
+    kw_cv = obtener_keywords(cv_clean)
+    kw_vac = obtener_keywords(vac_clean)
+
+    skills_cv = detectar_skills(cv_clean)
+    skills_vac = detectar_skills(vac_clean)
+
+    idiomas = detectar_idiomas(cv_clean)
+    educacion = detectar_educacion(cv_clean)
+    experiencia = estimar_experiencia(cv_clean)
 
     # --- SCORES ---
-    score_kw = (kw_match / kw_total) if kw_total else 0
-    score_skills = (skills_match / skills_total) if skills_total else 0
-    score_densidad = densidad
+    kw_score = len(kw_cv & kw_vac) / max(len(kw_vac),1)
+    skills_score = len(skills_cv & skills_vac) / max(len(skills_vac),1)
+    densidad = len(kw_cv & kw_vac) / max(len(kw_cv),1)
 
-    score_final = int((score_kw*0.5 + score_skills*0.3 + score_densidad*0.2)*100)
+    # BONUS experiencia
+    bonus_exp = min(experiencia / 10, 1)
+
+    # PENALIZACION skills críticas
+    faltantes = skills_vac - skills_cv
+    penalizacion = len(faltantes) * 0.05
+
+    score = (kw_score*0.4 + skills_score*0.3 + densidad*0.1 + bonus_exp*0.2) - penalizacion
+    score = max(0, min(int(score * 100), 100))
+
+    explicacion = f"""
+    KW:{int(kw_score*100)}% | Skills:{int(skills_score*100)}% | Exp:{experiencia} años
+    Penalización:{len(faltantes)} skills faltantes
+    """
 
     return {
-        "score": score_final,
-        "score_kw": int(score_kw*100),
-        "score_skills": int(score_skills*100),
-        "score_densidad": int(score_densidad*100),
-        "kw_ok": kw_cv & kw_vac,
-        "kw_missing": kw_vac - kw_cv,
+        "score": score,
         "skills_ok": skills_cv & skills_vac,
-        "skills_missing": skills_vac - skills_cv
+        "skills_missing": faltantes,
+        "idiomas": idiomas,
+        "educacion": educacion,
+        "experiencia": experiencia,
+        "explicacion": explicacion
     }
 
-# --- CLASIFICACION ---
-def clasificar(score):
-    if score >= 75:
-        return "🟢 Alto"
-    elif score >= 50:
-        return "🟡 Medio"
-    else:
-        return "🔴 Bajo"
-
 # --- UI ---
-if uploaded_file:
-    texto_cv = extraer_texto(uploaded_file)
+if uploaded_files:
+    vacante = st.text_area("Pega la descripción del puesto")
 
-    if texto_cv.strip():
-        st.success("✅ CV procesado correctamente")
+    if st.button("🚀 Analizar candidatos"):
+        if not vacante.strip():
+            st.warning("Agrega la vacante")
+        else:
+            resultados = []
 
-        with st.expander("Vista previa CV"):
-            st.text(texto_cv[:2000])
+            for file in uploaded_files:
+                texto = extraer_texto(file)
 
-        vacante = st.text_area("Pega la descripción del puesto")
+                if texto.strip():
+                    nombre = extraer_nombre(texto)
+                    analisis = analizar(texto, vacante)
 
-        if st.button("🚀 Analizar CV"):
-            if not vacante.strip():
-                st.warning("Agrega la vacante")
-            else:
-                resultado = analizar_avanzado(texto_cv, vacante)
+                    resultados.append({
+                        "Archivo": file.name,
+                        "Nombre": nombre,
+                        "Score": analisis["score"],
+                        "Experiencia (años)": analisis["experiencia"],
+                        "Educación": ", ".join(analisis["educacion"]),
+                        "Idiomas": ", ".join(analisis["idiomas"]),
+                        "Skills Match": ", ".join(analisis["skills_ok"]),
+                        "Skills Faltantes": ", ".join(analisis["skills_missing"]),
+                        "Explicación": analisis["explicacion"]
+                    })
 
-                st.markdown("---")
-                st.subheader("📊 Score Global")
-                st.metric("Compatibilidad", f"{resultado['score']}%")
-                st.write("Nivel:", clasificar(resultado["score"]))
+            df = pd.DataFrame(resultados).sort_values(by="Score", ascending=False)
 
-                # --- BARRAS ---
-                st.markdown("### 📈 Desglose del Score")
-                st.progress(resultado["score_kw"]/100)
-                st.write(f"Keywords: {resultado['score_kw']}%")
+            st.markdown("---")
+            st.subheader("🏆 Ranking Inteligente")
+            st.dataframe(df, use_container_width=True)
 
-                st.progress(resultado["score_skills"]/100)
-                st.write(f"Skills: {resultado['score_skills']}%")
+            # --- TOP ---
+            st.markdown("### 🥇 Mejores candidatos")
+            for i, row in df.head(3).iterrows():
+                st.success(f"{row['Nombre']} — {row['Score']}% ({row['Experiencia (años)']} años)")
 
-                st.progress(resultado["score_densidad"]/100)
-                st.write(f"Densidad: {resultado['score_densidad']}%")
-
-                # --- SKILLS ---
-                st.markdown("### 🧠 Skills detectadas")
-                st.write(list(resultado["skills_ok"]))
-
-                st.markdown("### ❌ Skills faltantes")
-                st.write(list(resultado["skills_missing"]))
-
-                # --- KEYWORDS ---
-                st.markdown("### ✅ Keywords relevantes")
-                st.write(list(resultado["kw_ok"])[:20])
-
-                st.markdown("### ❌ Keywords faltantes")
-                st.write(list(resultado["kw_missing"])[:20])
-
-                # --- RESUMEN ---
-                st.markdown("### 🧾 Resumen Ejecutivo")
-
-                if resultado["score"] < 50:
-                    st.error("Perfil con baja alineación. Requiere ajustes importantes.")
-                elif resultado["score"] < 75:
-                    st.warning("Buen perfil, pero puede optimizarse.")
-                else:
-                    st.success("Perfil altamente alineado con la vacante.")
-
-                # --- RECOMENDACIONES ---
-                st.markdown("### 💡 Recomendaciones")
-
-                if resultado["skills_missing"]:
-                    st.write("👉 Agrega estas skills:", list(resultado["skills_missing"])[:10])
-
-                if resultado["kw_missing"]:
-                    st.write("👉 Incorpora keywords clave en tu CV.")
-
-    else:
-        st.warning("No se pudo leer el archivo")
+            # --- DESCARGA ---
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button("📄 Descargar CSV", csv, "ranking.csv")
 
 else:
-    st.info("Sube tu CV para comenzar")
+    st.info("Sube CVs para comenzar")
 
 st.markdown("---")
-st.caption("ATS Expert Pro - Nivel Profesional sin IA")
+st.caption("ATS Expert Ultimate - Nivel Reclutador Senior")
