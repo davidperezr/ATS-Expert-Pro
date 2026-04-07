@@ -21,7 +21,7 @@ def analizar_con_ia(prompt):
     }
 
     data = {
-        "model": "meta-llama/llama-3-8b-instruct:free",
+        "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo:free",
         "messages": [
             {"role": "user", "content": prompt}
         ]
