@@ -7,12 +7,13 @@ import google.generativeai as genai
 st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="🛡️")
 
 # --- CONFIGURACIÓN DE IA ---
-# Para que esto funcione en la nube, recuerda configurar GEMINI_API_KEY en:
+# Para que esto funcione en la nube, configura GEMINI_API_KEY en:
 # Manage App -> Settings -> Secrets
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    # Usamos el nombre técnico completo para evitar errores de versión
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    # transport='rest' evita el error 404 v1beta en servidores como Streamlit Cloud
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"], transport='rest')
+    # Usamos el nombre del modelo estándar
+    model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
 
@@ -24,7 +25,7 @@ st.markdown("---")
 st.subheader("Paso 1: Validación de Formato")
 uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"])
 
-texto_extraido = "" # Variable para almacenar el contenido del CV
+texto_extraido = "" 
 
 if uploaded_file:
     st.info("Analizando estructura...")
@@ -66,7 +67,7 @@ if uploaded_file:
                 else:
                     with st.spinner("La IA está evaluando tu perfil contra la vacante..."):
                         try:
-                            # Prompt optimizado para un análisis profesional
+                            # Prompt optimizado
                             prompt = f"""
                             Actúa como un experto en Reclutamiento Técnico y Sistemas ATS.
                             Analiza el siguiente CV basándote en la descripción de la vacante proporcionada.
@@ -92,10 +93,10 @@ if uploaded_file:
                             
                         except Exception as e:
                             st.error(f"Error al conectar con la IA: {e}")
-                            st.info("Tip: Revisa que tu API Key sea válida y que no hayas excedido el límite de cuota gratuita.")
+                            st.info("Tip: Asegúrate de que tu requirements.txt tenga 'google-generativeai==0.7.2'")
                             
         else:
-            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen escaneada (OCR no soportado aún).")
+            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen escaneada.")
             
     except Exception as e:
         st.error(f"Hubo un error al procesar el archivo: {e}")
