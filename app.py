@@ -13,22 +13,27 @@ uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"]
 if uploaded_file:
     st.info("Analizando estructura...")
     
-    text = ""
-    # Lógica para leer PDF
-    if uploaded_file.type == "application/pdf":
-        reader = PyPDF2.PdfReader(uploaded_file)
-        for page in reader.pages:
-            text += page.extract_text()
+    texto_extraido = ""
     
-    # Lógica para leer DOCX
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        doc = Document(uploaded_file)
-        for para in doc.paragraphs:
-            text += para.text + "\n"
+    try:
+        # Lógica para leer PDF
+        if uploaded_file.type == "application/pdf":
+            reader = PyPDF2.PdfReader(uploaded_file)
+            for page in reader.pages:
+                texto_extraido += page.extract_text()
+        
+        # Lógica para leer DOCX
+        else:
+            doc = Document(uploaded_file)
+            for para in doc.paragraphs:
+                texto_extraido += para.text + "\n"
 
-    if text:
-        st.success("✅ Texto extraído correctamente")
-        with st.expander("Ver texto extraído"):
-            st.write(text)
-    else:
-        st.error("No se pudo extraer texto. Revisa si tu archivo es una imagen o está protegido.")
+        if texto_extraido.strip():
+            st.success("✅ ¡Éxito! El ATS pudo leer el texto de tu archivo.")
+            with st.expander("Haz clic aquí para ver el texto detectado"):
+                st.text(texto_extraido)
+        else:
+            st.warning("⚠️ El archivo se subió, pero parece estar vacío o ser una imagen (scaneado).")
+            
+    except Exception as e:
+        st.error(f"Hubo un error al procesar el archivo: {e}")
