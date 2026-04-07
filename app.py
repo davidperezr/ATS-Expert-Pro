@@ -1,33 +1,58 @@
 import streamlit as st
 from docx import Document
 import PyPDF2
-from google import genai
+import requests
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="ATS Expert Pro", layout="centered", page_icon="🛡️")
 
-# --- CONFIGURACIÓN DE IA ---
-if "GEMINI_API_KEY" in st.secrets:
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-else:
-    st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
+# --- VALIDAR API KEY ---
+if "OPENROUTER_API_KEY" not in st.secrets:
+    st.error("⚠️ No se encontró la API Key de OpenRouter en secrets.toml")
     st.stop()
 
-# --- INTERFAZ PRINCIPAL ---
+# --- FUNCIÓN IA ---
+def analizar_con_ia(prompt):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {st.secrets['OPENROUTER_API_KEY']}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "mistralai/mistral-7b-instruct:free",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code != 200:
+        raise Exception(response.text)
+
+    return response.json()["choices"][0]["message"]["content"]
+
+
+# --- INTERFAZ ---
 st.title("🛡️ ATS Expert Pro")
 st.markdown("---")
 
-# --- PASO 1: CARGA Y VALIDACIÓN ---
+# --- SUBIDA DE ARCHIVO ---
 st.subheader("Paso 1: Validación de Formato")
 uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"])
 
 texto_extraido = ""
 
+def recortar_texto(texto, max_chars=6000):
+    return texto[:max_chars]
+
 if uploaded_file:
     st.info("Analizando estructura...")
 
     try:
-        # --- PDF ---
+        # PDF
         if uploaded_file.type == "application/pdf":
             reader = PyPDF2.PdfReader(uploaded_file)
             for page in reader.pages:
@@ -35,75 +60,74 @@ if uploaded_file:
                 if text:
                     texto_extraido += text
 
-        # --- DOCX ---
+        # DOCX
         else:
             doc = Document(uploaded_file)
             for para in doc.paragraphs:
                 texto_extraido += para.text + "\n"
 
-        # --- VALIDACIÓN ---
         if texto_extraido.strip():
             st.success("✅ ¡Éxito! El ATS pudo leer el texto de tu archivo.")
 
-            with st.expander("Haz clic aquí para ver el texto detectado"):
+            with st.expander("Ver texto detectado"):
                 st.text(texto_extraido)
 
-            # --- PASO 2: IA ---
+            # --- IA ---
             st.markdown("---")
-            st.subheader("Paso 2: Análisis de Compatibilidad con IA")
+            st.subheader("Paso 2: Análisis con IA")
 
             vacante = st.text_area(
-                "Pega aquí la descripción del puesto o los requisitos:",
-                placeholder="Ejemplo: Se busca Ingeniero de Software con experiencia en Python, SQL y APIs REST...",
+                "Pega la descripción del puesto:",
                 height=200
             )
 
-            if st.button("🚀 Iniciar Análisis de IA"):
+            if st.button("🚀 Analizar CV"):
                 if not vacante.strip():
-                    st.warning("Por favor, pega la descripción de la vacante.")
+                    st.warning("Agrega la descripción de la vacante.")
                 else:
-                    with st.spinner("La IA está evaluando tu perfil..."):
+                    with st.spinner("Analizando con IA..."):
                         try:
-                            prompt = f"""
-Actúa como un experto en Reclutamiento Técnico y Sistemas ATS.
+                            # Reducir tamaño para evitar errores
+                            cv_corto = recortar_texto(texto_extraido)
+                            vacante_corta = recortar_texto(vacante)
 
-Analiza el siguiente CV comparándolo con la vacante.
+                            prompt = f"""
+Actúa como experto en reclutamiento ATS.
+
+Analiza este CV contra la vacante.
 
 CV:
-{texto_extraido}
+{cv_corto}
 
 VACANTE:
-{vacante}
+{vacante_corta}
 
-Entrega un reporte en formato Markdown con:
+Entrega:
 
 1. Porcentaje de compatibilidad (0-100%)
-2. Análisis de keywords (cuáles faltan)
-3. Fortalezas del candidato
-4. Recomendaciones específicas para mejorar el CV
+2. Keywords faltantes
+3. Fortalezas
+4. Recomendaciones específicas
 """
 
-                            response = client.models.generate_content(
-                                model="gemini-2.0-flash",
-                                contents=prompt
-                            )
+                            resultado = analizar_con_ia(prompt)
 
                             st.markdown("---")
-                            st.markdown("### 📊 Resultado del Análisis")
-                            st.markdown(response.text)
+                            st.markdown("### 📊 Resultado")
+                            st.markdown(resultado)
 
                         except Exception as e:
-                            st.error(f"Error al conectar con la IA: {e}")
+                            st.error(f"Error con IA: {e}")
 
         else:
-            st.warning("⚠️ El archivo parece vacío o es una imagen escaneada.")
+            st.warning("⚠️ El archivo parece vacío o escaneado.")
 
     except Exception as e:
-        st.error(f"Error al procesar el archivo: {e}")
+        st.error(f"Error procesando archivo: {e}")
 
 else:
-    st.write("Por favor, sube un archivo para comenzar.")
+    st.write("Sube un CV para comenzar.")
 
 # --- FOOTER ---
 st.markdown("---")
-st.caption("ATS Expert Pro - Desarrollado por David Pérez Reyes")
+st.caption("ATS Expert Pro - David Pérez Reyes")
