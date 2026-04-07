@@ -11,7 +11,7 @@ if "OPENROUTER_API_KEY" not in st.secrets:
     st.error("⚠️ No se encontró la API Key de OpenRouter en secrets.toml")
     st.stop()
 
-# --- FUNCIÓN IA ---
+# --- FUNCIÓN IA (con fallback de modelos) ---
 def analizar_con_ia(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -20,19 +20,28 @@ def analizar_con_ia(prompt):
         "Content-Type": "application/json"
     }
 
-    data = {
-        "model": "nousresearch/nous-hermes-2-mixtral-8x7b-dpo:free",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
+    modelos = [
+        "meta-llama/llama-3-8b-instruct",
+        "mistralai/mistral-7b-instruct"
+    ]
 
-    response = requests.post(url, headers=headers, json=data)
+    for modelo in modelos:
+        try:
+            data = {
+                "model": modelo,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
 
-    if response.status_code != 200:
-        raise Exception(response.text)
+            response = requests.post(url, headers=headers, json=data)
 
-    return response.json()["choices"][0]["message"]["content"]
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+        except:
+            continue
+
+    raise Exception("No hay modelos disponibles en este momento")
 
 
 # --- INTERFAZ ---
@@ -45,6 +54,7 @@ uploaded_file = st.file_uploader("Sube tu CV (PDF o DOCX)", type=["pdf", "docx"]
 
 texto_extraido = ""
 
+# --- FUNCIÓN PARA REDUCIR TEXTO ---
 def recortar_texto(texto, max_chars=6000):
     return texto[:max_chars]
 
@@ -87,7 +97,6 @@ if uploaded_file:
                 else:
                     with st.spinner("Analizando con IA..."):
                         try:
-                            # Reducir tamaño para evitar errores
                             cv_corto = recortar_texto(texto_extraido)
                             vacante_corta = recortar_texto(vacante)
 
@@ -113,7 +122,7 @@ Entrega:
                             resultado = analizar_con_ia(prompt)
 
                             st.markdown("---")
-                            st.markdown("### 📊 Resultado")
+                            st.markdown("### 📊 Resultado del Análisis")
                             st.markdown(resultado)
 
                         except Exception as e:
