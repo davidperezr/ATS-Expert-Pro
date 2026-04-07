@@ -21,7 +21,7 @@ def analizar_con_ia(prompt):
     }
 
     data = {
-        "model": "openchat/openchat-7b:free",
+        "model": "meta-llama/llama-3-8b-instruct:free",
         "messages": [
             {"role": "user", "content": prompt}
         ]
