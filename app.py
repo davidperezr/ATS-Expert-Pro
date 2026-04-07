@@ -6,10 +6,11 @@ import pandas as pd
 from collections import Counter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+import io
 
 # --- CONFIG ---
 st.set_page_config(page_title="ATS Expert PRO (Cloud)", layout="centered")
-st.title("🧠 ATS Expert PRO (Versión Estable sin IA)")
+st.title("🧠 ATS Expert PRO (Versión Completa)")
 st.markdown("---")
 
 uploaded_files = st.file_uploader(
@@ -46,7 +47,7 @@ def limpiar_texto(texto):
     texto = re.sub(r'[^a-zA-Z0-9\s]', ' ', texto.lower())
     return re.sub(r'\s+', ' ', texto)
 
-# --- ORTOGRAFIA BASICA (SIN IA NI JAVA) ---
+# --- ORTOGRAFIA BASICA ---
 def analizar_ortografia(texto):
     errores = []
 
@@ -164,9 +165,10 @@ def reescribir_cv(texto):
 
     return "\n".join(mejoras)
 
-# --- PDF ---
-def generar_pdf(nombre, score, observaciones, mejoras):
-    doc = SimpleDocTemplate(f"{nombre}_reporte.pdf")
+# --- PDF EN MEMORIA ---
+def generar_pdf_bytes(nombre, score, observaciones, mejoras):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
 
     contenido = []
@@ -185,16 +187,23 @@ def generar_pdf(nombre, score, observaciones, mejoras):
         contenido.append(Paragraph(m, styles['Normal']))
 
     doc.build(contenido)
+    buffer.seek(0)
 
-# --- DOCX ---
-def generar_docx(nombre, texto_mejorado):
+    return buffer
+
+# --- DOCX EN MEMORIA ---
+def generar_docx_bytes(texto_mejorado):
+    buffer = io.BytesIO()
     doc = Document()
     doc.add_heading('CV Optimizado', 0)
 
     for linea in texto_mejorado.split("\n"):
         doc.add_paragraph(linea)
 
-    doc.save(f"{nombre}_mejorado.docx")
+    doc.save(buffer)
+    buffer.seek(0)
+
+    return buffer
 
 # --- UI PRINCIPAL ---
 if uploaded_files:
@@ -212,11 +221,7 @@ if uploaded_files:
                 errores = analizar_ortografia(texto)
                 logros, resp = analizar_logros(texto)
                 bullets = detectar_bullets(texto)
-
                 texto_mejorado = reescribir_cv(texto)
-
-                generar_pdf(file.name, score, obs + errores, texto_mejorado)
-                generar_docx(file.name, texto_mejorado)
 
                 resultados.append({
                     "Archivo": file.name,
@@ -235,8 +240,58 @@ if uploaded_files:
         csv = df.to_csv(index=False).encode("utf-8")
         st.download_button("📄 Descargar CSV", csv, "reporte_cv.csv")
 
+        st.markdown("## 🔍 Detalle por candidato")
+
+        for file in uploaded_files:
+            texto = extraer_texto(file)
+
+            if texto.strip():
+                score = score_avanzado(texto, vacante)
+                obs = auditoria_cv(texto, vacante)
+                errores = analizar_ortografia(texto)
+                logros, resp = analizar_logros(texto)
+                bullets = detectar_bullets(texto)
+                texto_mejorado = reescribir_cv(texto)
+
+                pdf_buffer = generar_pdf_bytes(file.name, score, obs + errores, texto_mejorado)
+                docx_buffer = generar_docx_bytes(texto_mejorado)
+
+                with st.expander(f"📄 {file.name} - {score}%"):
+
+                    st.write("### 📊 Análisis")
+                    st.write(f"✅ Score ATS: {score}")
+                    st.write(f"🏆 Logros: {logros}")
+                    st.write(f"📋 Responsabilidades: {resp}")
+                    st.write(f"🔹 Bullets detectados: {bullets}")
+                    st.write(f"❌ Errores: {len(errores)}")
+
+                    st.write("### ⚠️ Observaciones")
+                    for o in obs:
+                        st.write(o)
+
+                    st.write("### ✍️ Errores detectados")
+                    for e in errores:
+                        st.write(e)
+
+                    st.write("### 🚀 CV Reescrito (preview)")
+                    st.text(texto_mejorado[:1000])
+
+                    st.download_button(
+                        label="📄 Descargar PDF reporte",
+                        data=pdf_buffer,
+                        file_name=f"{file.name}_reporte.pdf",
+                        mime="application/pdf"
+                    )
+
+                    st.download_button(
+                        label="📝 Descargar CV optimizado (DOCX)",
+                        data=docx_buffer,
+                        file_name=f"{file.name}_mejorado.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+
 else:
     st.info("Sube CVs para comenzar")
 
 st.markdown("---")
-st.caption("ATS Expert PRO - Versión Cloud Estable (Sin IA)")
+st.caption("ATS Expert PRO - Versión Completa Funcional")
