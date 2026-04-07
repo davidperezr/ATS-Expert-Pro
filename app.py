@@ -11,7 +11,8 @@ st.set_page_config(page_title="ATS Expert Pro", layout="centered")
 # GEMINI_API_KEY = "AIzaSyDfPDiD7M1rY1tK7p25m488R7doOoHm95s"
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Cambia 'gemini-1.5-flash' por 'gemini-pro'
+    model = genai.GenerativeModel('gemini-pro')
 else:
     st.error("⚠️ No se encontró la API Key en los secretos de Streamlit.")
 
